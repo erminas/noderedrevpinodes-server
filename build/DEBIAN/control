@@ -1,0 +1,16 @@
+Package: noderedrevpinodes-server
+Version: 1.0.0
+Architecture: all
+Maintainer: erminas GmbH <info@erminas.de>
+Priority: optional
+Section: misc
+Depends: python3 (>= 3.5.3-1), python3-revpimodio2 (>= 2.4.2-1)
+Installed-Size: in_kb
+Homepage: https://erminas.com/
+Description: Server backend for the RevPi-NodeRed-Nodes
+ The server is needed to communicate between the Node-RED RevPi nodes and 
+ the I/O pins on the RevPi. It is a Python based websocket server which 
+ utilizes the Python library RevPiModIO to interface between the RevPi process
+ image and Node-RED. The associated RevPi nodes can be acquired via the 
+ node-red-contrib-revpi-nodes package in the Node-RED Library or here: 
+ https://github.com/erminas/node-red-contrib-revpi-nodes

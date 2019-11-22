@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+cp /usr/share/noderedrevpinodes-server/bin/noderedrevpinodes-server.service /lib/systemd/system/noderedrevpinodes-server.service
+chmod 644 /lib/systemd/system/noderedrevpinodes-server.service
+systemctl daemon-reload
+
+sudo systemctl enable noderedrevpinodes-server.service
+
+sudo systemctl restart noderedrevpinodes-server.service
