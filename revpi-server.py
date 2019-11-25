@@ -166,9 +166,15 @@ class RevPiServer:
             server.send_message(client, message + ";" + json.dumps(self.get_io_list()))
         elif command == "output":  # write to pin
             if isinstance(self.revpi.io[args[0]].value, bool):
-                val = bool(int(args[1]))
+                try:
+                    val = bool(int(args[1]))
+                except ValueError:
+                    val = False
             elif isinstance(self.revpi.io[args[0]].value, int):
-                val = int(args[1])
+                try:
+                    val =  int(args[1])
+                except ValueError:
+                    val = 0
             else:
                 val = args[1]
 
