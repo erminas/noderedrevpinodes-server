@@ -20,7 +20,7 @@ Alternative (direct download from GitHub):
 wget https://github.com/erminas/noderedrevpinodes-server/releases/download/v1.0.0/noderedrevpinodes-server_1_0_0.deb
 sudo apt-get install ./noderedrevpinodes-server_1_0_0.deb
 ```
-Please change the version "v1.0.0" and the filename "noderedrevpinodes-server_1_0_0.deb" to the respective version you want to install.
+Please change the version "v1.0.0" and the filename "noderedrevpinodes-server_1_0_0.deb" to the respective [release](https://github.com/erminas/noderedrevpinodes-server/releases) you want to install.
 
 2. The server is automatically started and runs in the background as daemon.
 
