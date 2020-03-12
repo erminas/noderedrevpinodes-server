@@ -73,8 +73,9 @@ class FirewallBlocker:
 class RevPiServer:
     command_list = ["commands", "list", "output"]
 
-    def __init__(self, port):
+    def __init__(self, port, block_external_connections):
         self.port = port
+        self.block_external_connections = block_external_connections
         self.io_list = None
 
         # init RevPiModIO with auto refresh
@@ -85,8 +86,9 @@ class RevPiServer:
         self.revpi = revpimodio2.RevPiModIO(autorefresh=True, direct_output=True)
 
         # block external connections on port
-        self.firewall = FirewallBlocker(self.port, "127.0.0.1")
-        self.firewall.block_connections()
+        if self.block_external_connections:
+            self.firewall = FirewallBlocker(self.port, "127.0.0.1")
+            self.firewall.block_connections()
 
         # exit function to clean
         signal.signal(signal.SIGTERM, self.clean_on_exit)
@@ -124,7 +126,7 @@ class RevPiServer:
         val = str(val)
         io_name = str(io_name)
 
-        message="input;" + io_name + "," + val
+        message = "input;" + io_name + "," + val
         self.websocketserver.send_message_to_all(message)
         logging.debug(str(time.time()) + "," + message)
 
@@ -172,7 +174,7 @@ class RevPiServer:
                     val = False
             elif isinstance(self.revpi.io[args[0]].value, int):
                 try:
-                    val =  int(args[1])
+                    val = int(args[1])
                 except ValueError:
                     val = 0
             else:
@@ -190,11 +192,12 @@ class RevPiServer:
             val = str(val)
             io_name = str(args[0])
             server.send_message(client, message + ";" + io_name + "," + val)
-        else: # print server commands
+        else:  # print server commands
             server.send_message(client, message + ";" + (','.join(revPiServer.command_list)))
 
     def handle_websocket_connected(self, client, server):
-        if client['address'][0] != "localhost" and client['address'][0] != "127.0.0.1":
+        if self.block_external_connections and \
+                client['address'][0] != "localhost" and client['address'][0] != "127.0.0.1":
             logging.warning("Closing external connection of client with id " + str(client['id']))
             client['handler'].send_text("", opcode=0x8)
         else:
@@ -207,7 +210,8 @@ class RevPiServer:
         # exit websocket server
         self.websocketserver.server_close()
 
-        self.firewall.revert_block_connections()
+        if self.block_external_connections:
+            self.firewall.revert_block_connections()
 
         self.revpi.cleanup()
 
@@ -230,5 +234,6 @@ class RevPiServer:
 
 if __name__ == "__main__":
     port = 8000
-    revPiServer = RevPiServer(port)
+    block_external_connections = True
+    revPiServer = RevPiServer(port, block_external_connections)
     revPiServer.start()
