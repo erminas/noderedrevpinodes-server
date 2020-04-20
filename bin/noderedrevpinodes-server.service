@@ -1,6 +1,7 @@
 [Unit]
 Description=Revolution Pi NodeRed Service
 After=multi-user.target
+Documentation="https://github.com/erminas/noderedrevpinodes-server"
 
 [Service]
 Type=simple

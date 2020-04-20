@@ -31,6 +31,24 @@ sudo systemctl stop noderedrevpinodes-server.service
 sudo systemctl restart noderedrevpinodes-server.service
 ```
 
+### Configuration (optional)
+
+You can optionally create a configuration file to change settings under "~/.config/noderedrevpinodes-server/server_config.json" with following structure:
+
+```
+{
+    "version": "noderedrevpinodes-server_config_1.0.0",
+    "port": 8000,
+    "block_external_connections": true
+}
+```
+
+**port**: Port used by the server. Default: 8000
+
+**block_external_connections**: Actively block external connections, therefore only allow connections from Node-RED on localhost. Recommended setting in potentially unsafe environments is true. Default: true 
+
+Changes to the configuration file only take effect after the daemon is restarted.
+
 ### Remarks
 
 The server uses a direct output mode, so other processes and services can concurrently write to the output pins. 

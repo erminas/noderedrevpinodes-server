@@ -1,17 +1,16 @@
 #!/bin/bash
 
-cp revpi-server.py build/usr/share/noderedrevpinodes-server/
-cp -r websocket_server/ build/usr/share/noderedrevpinodes-server/
+mkdir -p build/noderedrevpinodes-server-1.0.1/noderedrevpinodes-server
+mkdir -p build/noderedrevpinodes-server-1.0.1/doc
 
-cp -r bin/ build/usr/share/noderedrevpinodes-server/
+cp revpi-server.py build/noderedrevpinodes-server-1.0.1/noderedrevpinodes-server/
+cp -r websocket_server/ build/noderedrevpinodes-server-1.0.1/noderedrevpinodes-server/
 
-cp copyright build/usr/share/doc/noderedrevpinodes-server/
-cp -r license/ build/usr/share/doc/noderedrevpinodes-server/
+touch build/noderedrevpinodes-server-1.0.1/noderedrevpinodes-server/revpi-server.log
 
+cp bin/noderedrevpinodes-server.service build/noderedrevpinodes-server-1.0.1/debian
 
-sudo chown root:root -R build
-sudo chmod -R 755 build
-sudo find build/usr/share/doc/noderedrevpinodes-server/ -type f -exec chmod 644 -- {} +
-sudo find build/usr/share/noderedrevpinodes-server/bin -type f -exec chmod 644 -- {} +
+cp -r license/ build/noderedrevpinodes-server-1.0.1/doc/
 
-sudo dpkg -b build noderedrevpinodes-server.deb
+cd build/noderedrevpinodes-server-1.0.1
+dpkg-buildpackage -b -us -uc -a armhf

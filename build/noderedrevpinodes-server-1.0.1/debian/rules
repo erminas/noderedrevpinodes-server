@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+#export DH_VERBOSE = 1
+
+export PYBUILD_NAME=noderedrevpinodes-server
+
+%:
+	dh $@ --with=systemd
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 755 noderedrevpinodes-server/revpi-server.py
+
+override_dh_installinit:
+	true
