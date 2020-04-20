@@ -162,7 +162,6 @@ class RevPiServer:
 
         message = {"name": io_name, "value": val}
 
-        logging.info("input;" + json.dumps(message))
         self.websocketserver.send_message_to_all("input;" + json.dumps(message))
         logging.debug(str(time.time()) + "," + json.dumps(message))
 
@@ -238,8 +237,6 @@ class RevPiServer:
             io_name = str(args[0])
 
             return_message = {"name": io_name, "value": val}
-
-            logging.info(message + ";" + json.dumps(return_message))
 
             server.send_message(client, message + ";" + json.dumps(return_message))
         else:  # print server commands
