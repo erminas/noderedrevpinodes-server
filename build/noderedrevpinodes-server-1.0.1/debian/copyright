@@ -1,8 +1,0 @@
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: noderedrevpinodes-server
-Upstream-Contact: erminas GmbH <info@erminas.de>
-Source: https://github.com/erminas
-
-Files: *
-Copyright: 2019 erminas GmbH <info@erminas.de>
-License: LGPL-3.0-only
