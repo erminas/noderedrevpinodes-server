@@ -190,7 +190,6 @@ class RevPiServer:
                 if id in self.authorized_clients:
                     client = self.connected_clients[id]
                     self.send_websocket_message(client, "input;" + json.dumps(message))
-                    logging.debug(str(client.id) + "," + json.dumps(message))
 
     def get_io_list(self, force_update):
         if self.io_list and not force_update:
@@ -236,18 +235,14 @@ class RevPiServer:
         self.connected_clients[client.id].message_queue.append(message)
 
     @asyncio.coroutine
-    def publish_messages_to_all(self, client, path):
-        with self.connected_clients_lock:
-            for id in self.connected_clients:
-                while client.message_queue:
-                    message = client.message_queue.pop(0)
-                    yield from client.websocket.send(message)
+    def publish_messages_to_client(self, client, path):
+        while client.message_queue:
+            message = client.message_queue.pop(0)
+            logging.debug(str(client.id) + "," + json.dumps(message))
+            yield from client.websocket.send(message)
 
     @asyncio.coroutine
     def get_client_requests(self, client, path):
-        with self.connected_clients_lock:
-            client = self.connected_clients[client.id]
-
         message = yield from client.websocket.recv()
         global revPiServer
         nmessage = message.split("#")
@@ -351,33 +346,30 @@ class RevPiServer:
 
         try:
             while self.running:
-                retrieve_task = asyncio.ensure_future(self.get_client_requests(client, path))
-                publish_task = asyncio.ensure_future(self.publish_messages_to_all(client, path))
+                #retrieve_task = asyncio.ensure_future(self.get_client_requests(client, path))
+                #publish_task = asyncio.ensure_future(self.publish_messages_to_all(client, path))
 
-                tasks = [retrieve_task, publish_task]
+                #tasks = [retrieve_task, publish_task]
 
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                #results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 #reraise gathered exceptions to find disconnected clients
-                for result in results:
-                   if isinstance(result, Exception):
-                       raise result
+                #for result in results:
+                #   if isinstance(result, Exception):
+                #       raise result
                 
-				#retrieve_task = asyncio.ensure_future(self.get_client_requests(client, path))
-                #publish_task = asyncio.ensure_future(self.publish_messages_to_all(client, path))
-                #done, pending = await asyncio.wait([retrieve_task, publish_task],
-                #                                    return_when=asyncio.FIRST_COMPLETED
-                #                                    )
-                #for task in pending:
-                #    if task.done():
-                #        ex = task.exception()
-               #         if ex:
-                #            raise ex
-                #    task.cancel()
-                #for task in done:
-                #    ex = task.exception()
-                #    if ex:
-                 #       raise ex
+                retrieve_task = asyncio.ensure_future(self.get_client_requests(client, path))
+                publish_task = asyncio.ensure_future(self.publish_messages_to_client(client, path))
+                done, pending = await asyncio.wait([retrieve_task, publish_task],
+                                                    return_when=asyncio.FIRST_COMPLETED
+                                                    )
+                for task in pending:
+                    task.cancel()
+                    
+                for task in done:
+                    ex = task.exception()
+                    if ex:
+                        raise ex
 
                 await asyncio.sleep(0.1)
         except websockets.ConnectionClosed as e:
