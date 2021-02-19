@@ -66,7 +66,7 @@ class RevPiServer:
         self.io_list = None
         self.running = True
 
-        self.supported_client_versions = ["1.0.7"]
+        self.supported_client_versions = ["1.0.7","1.0.8"]
         self.allow_all_user = True
         self.private_key_file = None
         self.cert_file = None
