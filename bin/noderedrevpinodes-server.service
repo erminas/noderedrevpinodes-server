@@ -5,7 +5,8 @@ Documentation="https://github.com/erminas/noderedrevpinodes-server"
 
 [Service]
 Type=simple
-ExecStart=/bin/sh -c 'exec /usr/bin/python3 -u revpi-server.py 2>> revpi-server.log'
+StandardOutput=append:%L/revpi-server.log
+ExecStart=/usr/bin/python3 -u revpi-server.py
 WorkingDirectory=/usr/share/noderedrevpinodes-server/
 Restart=on-abort
 
