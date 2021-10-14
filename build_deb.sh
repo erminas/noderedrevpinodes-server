@@ -5,7 +5,7 @@ mkdir -p build/noderedrevpinodes-server-1.0.3/doc
 
 cp revpi-server.py build/noderedrevpinodes-server-1.0.3/noderedrevpinodes-server/
 
-touch build/noderedrevpinodes-server-1.0.3/noderedrevpinodes-server/revpi-server.log
+ln -s build/noderedrevpinodes-server-1.0.3/noderedrevpinodes-server/revpi-server.log /var/log/revpi-server.log
 
 cp bin/noderedrevpinodes-server.service build/noderedrevpinodes-server-1.0.3/debian
 
