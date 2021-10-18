@@ -186,7 +186,7 @@ class RevPiServer:
 
         ssl_context.load_cert_chain(self.cert_file, self.private_key_file)
 
-        start_server = websockets.serve(self.handle_clients, ip, self.port, loop=self.event_loop, ssl=ssl_context, ping_timeout=None)
+        start_server = websockets.serve(self.handle_clients, ip, self.port, loop=self.event_loop, ssl=ssl_context, ping_timeout=None, compression=None)
 
         self.event_loop.run_until_complete(start_server)
         self.event_loop.run_forever()
@@ -352,7 +352,7 @@ class RevPiServer:
                         logging.warning("Invalid input "+ raw_val +" for setting output of pin "+io_name)
                         validInputs = False
                         
-                    if validInputs and io_name in self.revpi.io:
+                    if validInputs and (io_name in self.revpi.io):
                         if isinstance(self.revpi.io[io_name].value, bool):
                             try:
                                 val = bool(int(raw_val))
