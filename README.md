@@ -8,7 +8,7 @@ The server is needed to communicate between the Node-RED RevPi nodes and the I/O
 It is a Python based websocket server which utilizes the Python library [RevPiModIO](https://revpimodio.org/) to interface between the RevPi process image and Node-RED. The associated RevPi nodes can be acquired via the [node-red-contrib-revpi-nodes package](https://flows.nodered.org/node/node-red-contrib-revpi-nodes) in the Node-RED Library or [here](https://github.com/erminas/node-red-contrib-revpi-nodes).
 
 ### Requirements
-The server requires  [Raspbian Stretch ](https://revolution.kunbus.de/shop/de/stretch) for correct function.
+The server requires [Raspbian Stretch ](https://revolution.kunbus.de/shop/de/stretch) or [Raspbian Buster ](https://revolutionpi.de/shop/de/buster).
 
 ### Installation
 1. Install the server with the following command:
@@ -17,10 +17,10 @@ sudo apt-get install noderedrevpinodes-server
 ```
 Alternative (direct download from GitHub):
 ```
-wget https://github.com/erminas/noderedrevpinodes-server/releases/download/1.0.2/noderedrevpinodes-server_1.0.2.deb
-sudo apt install ./noderedrevpinodes-server_1.0.2.deb
+wget https://github.com/erminas/noderedrevpinodes-server/releases/download/1.0.3/noderedrevpinodes-server_1.0.3.deb
+sudo apt install ./noderedrevpinodes-server_1.0.3.deb
 ```
-Please change the version "1.0.2" and the filename "noderedrevpinodes-server_1.0.2.deb" to the respective [release](https://github.com/erminas/noderedrevpinodes-server/releases) you want to install.
+Please change the version "1.0.3" and the filename "noderedrevpinodes-server_1.0.3.deb" to the respective [release](https://github.com/erminas/noderedrevpinodes-server/releases) you want to install.
 
 2. The server is automatically started and runs in the background as daemon.
 
