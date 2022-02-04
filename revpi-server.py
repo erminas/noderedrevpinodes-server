@@ -7,6 +7,7 @@
 """
 import os
 import pathlib
+import distro
 import traceback
 import uuid
 
@@ -49,6 +50,7 @@ logging.basicConfig(handlers=[RotatingFileHandler('/var/log/revpi-server.log', m
 
 SSL_PROTOCOLS = (asyncio.sslproto.SSLProtocol,)
 
+
 def ignore_aiohttp_ssl_eror(loop):
     """Ignore aiohttp #3535 / cpython #13548 issue with SSL data after close
     There is an issue in Python 3.7 up to 3.7.3 that over-reports a
@@ -76,9 +78,9 @@ def ignore_aiohttp_ssl_eror(loop):
             exception = context.get('exception')
             protocol = context.get('protocol')
             if (
-                isinstance(exception, ssl.SSLError)
-                and exception.reason == 'KRB5_S_INIT'
-                and isinstance(protocol, SSL_PROTOCOLS)
+                    isinstance(exception, ssl.SSLError)
+                    and exception.reason == 'KRB5_S_INIT'
+                    and isinstance(protocol, SSL_PROTOCOLS)
             ):
                 # if loop.get_debug():
                 logging.warning('Ignoring asyncio SSL KRB5_S_INIT error')
@@ -129,7 +131,7 @@ class RevPiServer:
         self.register_input_callbacks()
 
         self.connected_clients = []
-        #self.connected_clients_lock = threading.Lock()
+        # self.connected_clients_lock = threading.Lock()
 
         self.authorized_user = {}
         self.load_authorized_user()
@@ -180,13 +182,21 @@ class RevPiServer:
         ip = '0.0.0.0'
         if self.block_external_connections:
             ip = '127.0.0.1'
+        if distro.linux_distribution()[2] == 'stretch':
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+            localhost_pem = os.path.abspath(self.cert_file)
 
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        localhost_pem = os.path.abspath(self.cert_file)
+            ssl_context.load_cert_chain(self.cert_file, self.private_key_file)
 
-        ssl_context.load_cert_chain(self.cert_file, self.private_key_file)
+            start_server = websockets.serve(self.handle_clients, ip, self.port, loop=self.event_loop, ssl=ssl_context)
+        else:
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            localhost_pem = os.path.abspath(self.cert_file)
 
-        start_server = websockets.serve(self.handle_clients, ip, self.port, loop=self.event_loop, ssl=ssl_context, ping_timeout=None, compression=None)
+            ssl_context.load_cert_chain(self.cert_file, self.private_key_file)
+
+            start_server = websockets.serve(self.handle_clients, ip, self.port, loop=self.event_loop, ssl=ssl_context,
+                                            ping_timeout=None, compression=None)
 
         self.event_loop.run_until_complete(start_server)
         self.event_loop.run_forever()
@@ -229,7 +239,7 @@ class RevPiServer:
         io_name = str(io_name)
 
         message = {"name": io_name, "value": val}
-        #with self.connected_clients_lock:
+        # with self.connected_clients_lock:
         for client in self.connected_clients:
             if client.id in self.authorized_clients:
                 self.send_websocket_message(client, "input;" + json.dumps(message))
@@ -277,7 +287,7 @@ class RevPiServer:
     def send_websocket_message(self, client, message):
         client.message_queue.append(message)
 
-    #@asyncio.coroutine
+    # @asyncio.coroutine
     async def publish_messages_to_client(self, client, path):
         try:
             while client.message_queue:
@@ -286,12 +296,10 @@ class RevPiServer:
                 await client.websocket.send(message)
             return True
         except websockets.ConnectionClosed as e:
-            logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: "+str(e))
+            logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: " + str(e))
             return False
-          
-        
 
-    #@asyncio.coroutine
+    # @asyncio.coroutine
     async def get_client_requests(self, client, path):
         try:
             message = await client.websocket.recv()
@@ -309,7 +317,6 @@ class RevPiServer:
                 user = str(args[1])
                 password = str(args[2])
                 getAutomaticUpdates = str(args[3])
-                
 
                 if not client_version in self.supported_client_versions:
                     logging.info("Unsupported client version")
@@ -320,7 +327,7 @@ class RevPiServer:
                         password):
                     logging.info("User is authorized")
                     self.authorized_clients.append(client.id)
-                    
+
                     if getAutomaticUpdates == 'True':
                         self.connected_clients.append(client)
 
@@ -349,9 +356,9 @@ class RevPiServer:
                     except TypeError:
                         io_name = str(args[0])
                         raw_val = str(args[1])
-                        logging.warning("Invalid input "+ raw_val +" for setting output of pin "+io_name)
+                        logging.warning("Invalid input " + raw_val + " for setting output of pin " + io_name)
                         validInputs = False
-                        
+
                     if validInputs and (io_name in self.revpi.io):
                         if isinstance(self.revpi.io[io_name].value, bool):
                             try:
@@ -396,7 +403,7 @@ class RevPiServer:
                     self.send_websocket_message(client, message + ";" + (','.join(revPiServer.command_list)))
             return True
         except websockets.ConnectionClosed as e:
-            logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: "+str(e))
+            logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: " + str(e))
             return False
 
     # @asyncio.coroutine
@@ -412,32 +419,21 @@ class RevPiServer:
         client_connected = True
         try:
             while self.running and client_connected:
-                #retrieve_task = asyncio.ensure_future(self.get_client_requests(client, path))
-                #publish_task = asyncio.ensure_future(self.publish_messages_to_client(client, path))
 
-                #tasks = [retrieve_task, publish_task]
-
-                #results = await asyncio.gather(*tasks)
-
-                #reraise gathered exceptions to find disconnected clients
-                #for result in results:
-                #    if isinstance(result, Exception):
-                #       raise result
-                #    elif result == False:
-                #        client_connected=False
-            
                 retrieve_task = asyncio.ensure_future(self.get_client_requests(client, path))
                 publish_task = asyncio.ensure_future(self.publish_messages_to_client(client, path))
-                done, pending = await asyncio.wait([retrieve_task, publish_task],
-                                                    return_when=asyncio.FIRST_COMPLETED
-                                                    )
-                for task in pending:
-                    task.cancel()
-                    
-                for task in done:
-                    if task.result() == False:
-                        client_connected=False
-                    
+
+                tasks = [retrieve_task, publish_task]
+
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # reraise gathered exceptions to find disconnected clients
+                for result in results:
+                    if isinstance(result, Exception):
+                        raise result
+                    elif result == False:
+                        client_connected = False
+
                 await asyncio.sleep(0.1)
         except Exception as e:
             logging.error("There was an unexpected error. " + str(e))
