@@ -294,117 +294,114 @@ class RevPiServer:
                 message = client.message_queue.pop(0)
                 logging.debug(str(client.id) + "," + json.dumps(message))
                 await client.websocket.send(message)
-            return True
         except websockets.ConnectionClosed as e:
             logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: " + str(e))
-            return False
 
     # @asyncio.coroutine
     async def get_client_requests(self, client, path):
         try:
-            message = await client.websocket.recv()
-            global revPiServer
-            nmessage = message.split("#")
+            while True:
+                message = await client.websocket.recv()
+                global revPiServer
+                nmessage = message.split("#")
 
-            command = nmessage[0]
-            args = []
-            if len(nmessage) > 1:
-                if nmessage[1] != "undefined":
-                    args = json.loads(nmessage[1])
+                command = nmessage[0]
+                args = []
+                if len(nmessage) > 1:
+                    if nmessage[1] != "undefined":
+                        args = json.loads(nmessage[1])
 
-            if command == "login":
-                client_version = str(args[0])
-                user = str(args[1])
-                password = str(args[2])
-                getAutomaticUpdates = str(args[3])
+                if command == "login":
+                    client_version = str(args[0])
+                    user = str(args[1])
+                    password = str(args[2])
+                    getAutomaticUpdates = str(args[3])
 
-                if not client_version in self.supported_client_versions:
-                    logging.info("Unsupported client version")
-                    return_message = {"error": "ERROR_UNSUPPORTED_VERSION"}
-                    self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-                elif self.allow_all_user or client.id in self.authorized_clients or self.check_user_credentials(
-                        user,
-                        password):
-                    logging.info("User is authorized")
-                    self.authorized_clients.append(client.id)
+                    if not client_version in self.supported_client_versions:
+                        logging.info("Unsupported client version")
+                        return_message = {"error": "ERROR_UNSUPPORTED_VERSION"}
+                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                    elif self.allow_all_user or client.id in self.authorized_clients or self.check_user_credentials(
+                            user,
+                            password):
+                        logging.info("User is authorized")
+                        self.authorized_clients.append(client.id)
 
-                    if getAutomaticUpdates == 'True':
-                        self.connected_clients.append(client)
+                        if getAutomaticUpdates == 'True':
+                            self.connected_clients.append(client)
 
-                    return_message = {}
-                    self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                        return_message = {}
+                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                    else:
+                        logging.warning("Unauthorized user!")
+
+                        return_message = {"error": "ERROR_AUTH"}
+                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                 else:
-                    logging.warning("Unauthorized user!")
+                    if not client.id in self.authorized_clients:
+                        logging.warning("Unauthorized user!")
+                        return_message = {"error": "ERROR_AUTH"}
+                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                        return
 
-                    return_message = {"error": "ERROR_AUTH"}
-                    self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-            else:
-                if not client.id in self.authorized_clients:
-                    logging.warning("Unauthorized user!")
-                    return_message = {"error": "ERROR_AUTH"}
-                    self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-                    return
-
-                if command == "list":  # list io pins
-                    force_update = (args[0] == 'True')
-                    self.send_websocket_message(client, message + ";" + json.dumps(self.get_io_list(force_update)))
-                elif command == "output":  # write to pin
-                    try:
-                        io_name = str(args[0])
-                        raw_val = int(args[1])
-                        validInputs = True
-                    except TypeError:
-                        io_name = str(args[0])
-                        raw_val = str(args[1])
-                        logging.warning("Invalid input " + raw_val + " for setting output of pin " + io_name)
-                        validInputs = False
-
-                    if validInputs and (io_name in self.revpi.io):
-                        if isinstance(self.revpi.io[io_name].value, bool):
-                            try:
-                                val = bool(int(raw_val))
-                            except ValueError:
-                                val = False
-                        elif isinstance(self.revpi.io[io_name].value, int):
-                            try:
-                                val = int(raw_val)
-                            except ValueError:
-                                val = 0
-                        else:
-                            val = raw_val
+                    if command == "list":  # list io pins
+                        force_update = (args[0] == 'True')
+                        self.send_websocket_message(client, message + ";" + json.dumps(self.get_io_list(force_update)))
+                    elif command == "output":  # write to pin
                         try:
-                            self.revpi.io[io_name].value = val
-                            self.revpi.writeprocimg()
-                            return_message = {}
+                            io_name = str(args[0])
+                            raw_val = int(args[1])
+                            validInputs = True
+                        except TypeError:
+                            io_name = str(args[0])
+                            raw_val = str(args[1])
+                            logging.warning("Invalid input " + raw_val + " for setting output of pin " + io_name)
+                            validInputs = False
+
+                        if validInputs and (io_name in self.revpi.io):
+                            if isinstance(self.revpi.io[io_name].value, bool):
+                                try:
+                                    val = bool(int(raw_val))
+                                except ValueError:
+                                    val = False
+                            elif isinstance(self.revpi.io[io_name].value, int):
+                                try:
+                                    val = int(raw_val)
+                                except ValueError:
+                                    val = 0
+                            else:
+                                val = raw_val
+                            try:
+                                self.revpi.io[io_name].value = val
+                                self.revpi.writeprocimg()
+                                return_message = {}
+                                self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                            except OverflowError:
+                                logging.warning("Error setting " + io_name + " to " + str(val) + ", overflow!")
+                                return_message = {"error": "ERROR_UNKNOWN"}
+                                self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                        else:
+                            return_message = {"name": io_name, "value": raw_val, "error": "ERROR_PIN"}
                             self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-                        except OverflowError:
-                            logging.warning("Error setting " + io_name + " to " + str(val) + ", overflow!")
-                            return_message = {"error": "ERROR_UNKNOWN"}
+
+                    elif command == "getpin":  # get single pin value
+                        io_name = str(args[0])
+                        val = ""
+
+                        if io_name in self.revpi.io:
+                            val = self.convert_value(self.revpi.io[io_name].value)
+                            val = str(val)
+                            return_message = {"name": io_name, "value": val}
+
                             self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-                    else:
-                        return_message = {"name": io_name, "value": raw_val, "error": "ERROR_PIN"}
-                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                        else:
+                            return_message = {"name": io_name, "value": val, "error": "ERROR_PIN"}
+                            self.send_websocket_message(client, message + ";" + json.dumps(return_message))
 
-                elif command == "getpin":  # get single pin value
-                    io_name = str(args[0])
-                    val = ""
-
-                    if io_name in self.revpi.io:
-                        val = self.convert_value(self.revpi.io[io_name].value)
-                        val = str(val)
-                        return_message = {"name": io_name, "value": val}
-
-                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-                    else:
-                        return_message = {"name": io_name, "value": val, "error": "ERROR_PIN"}
-                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-
-                else:  # print server commands
-                    self.send_websocket_message(client, message + ";" + (','.join(revPiServer.command_list)))
-            return True
+                    else:  # print server commands
+                        self.send_websocket_message(client, message + ";" + (','.join(revPiServer.command_list)))
         except websockets.ConnectionClosed as e:
             logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: " + str(e))
-            return False
 
     # @asyncio.coroutine
     async def handle_clients(self, websocket, path):
@@ -416,25 +413,12 @@ class RevPiServer:
         client = Websocket_Client(websocket)
         logging.info("New client connected and was given id " + str(client.id))
 
-        client_connected = True
         try:
-            while self.running and client_connected:
-
-                retrieve_task = asyncio.ensure_future(self.get_client_requests(client, path))
-                publish_task = asyncio.ensure_future(self.publish_messages_to_client(client, path))
-
-                tasks = [retrieve_task, publish_task]
-
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                # reraise gathered exceptions to find disconnected clients
-                for result in results:
-                    if isinstance(result, Exception):
-                        raise result
-                    elif result == False:
-                        client_connected = False
-
+            asyncio.ensure_future(self.get_client_requests(client, path))
+            while self.running and client.websocket.open:
+                asyncio.ensure_future(self.publish_messages_to_client(client, path))
                 await asyncio.sleep(0.1)
+
         except Exception as e:
             logging.error("There was an unexpected error. " + str(e))
             logging.error("Traceback: " + traceback.format_exc())
