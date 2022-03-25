@@ -1,10 +1,67 @@
 noderedrevpinodes-server (1.0.4) stable; urgency=medium
-  * Version 1.0.4
 
-  * Version 1.0.3
+    * Bump version to 1.0.4
+    * redesign of the asyncio calls
 
-  * Version 1.0.2
+ -- Dennis Filsinger <dennis.filsinger@erminas.de>  Wed, 23 Mar 2022 12:06:20 +0100
 
-  * Version 1.0.1
+noderedrevpinodes-server (1.0.3-1) unstable; urgency=medium
 
- -- erminasGmbH <info@erminas.de>  Thu, 18 Jun 2020 13:50:00 +0100
+    * Fix memleak and build issues
+    * disabled websocket message compression on server side
+      to prevent known problems as memory fragmentation
+    * changed log location to /var/log/revpi-server.log
+    * proper async handling for send and retrieve
+
+ -- Dennis Filsinger <dennis.filsinger@erminas.de>  Fri, 4 Feb 2022 18:36:27 +0100
+
+noderedrevpinodes-server (1.0.3) stable; urgency=medium
+
+    * Bump version to 1.0.3
+    * adapted debian build to new 1.0.3 release
+    * expandend list of supported clients
+
+ -- Jonas Gerlach <jonas.gerlach@erminas.de>  Fri, 19 Feb 2021 14:18:54 +0100
+
+noderedrevpinodes-server (1.0.2-1) stable; urgency=medium
+
+    * fixed unused thread locks in server tasks and reverted
+      from gather to asyncio wait
+
+ -- Jonas Gerlach <jonas.gerlach@erminas.de>  Wed, 16 Dec 2020 18:42:44 +0100
+
+noderedrevpinodes-server (1.0.2) stable; urgency=medium
+
+    * Bump version to 1.0.2
+    * switch from websocket_server to websockets
+    * wss support with support for certificates
+    * support for basic user authorization
+
+ -- Jonas Gerlach <jonas.gerlach@erminas.de>  Tue, 15 Dec 2020 20:34:21 +0100
+
+noderedrevpinodes-server (1.0.1) stable; urgency=medium
+
+    * Bump version to 1.0.1
+    * changed the readme to include the new naming convention
+      for the debian package
+    * removed debug log messages
+    * proper restart of revpimodio after pictory config change
+    * better reconnect handling
+    * added configuration file
+    * hotfix with switch for external ip blocking
+
+ -- Jonas Gerlach <jonas.gerlach@erminas.de>  Mon, 20 Apr 2020 17:13:45 +0200
+
+noderedrevpinodes-server (1.0.0-1) stable; urgency=medium
+
+    * raspbian stretch is required
+
+ -- Dennis Filsinger <dennis.filsinger@erminas.de>  Thu, 30 Jan 2020 11:35:57 +0100
+
+noderedrevpinodes-server (1.0.0) stable; urgency=medium
+
+    * Initial version 1.0.0
+    * better command input handling in python server
+      (empty string as output value)
+
+ -- Dennis Filsinger <dennis.filsinger@erminas.de>  Mon, 25 Nov 2019 16:13:50 +0100
