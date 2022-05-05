@@ -372,6 +372,7 @@ class RevPiServer:
                             else:
                                 val = raw_val
                             try:
+                                time.sleep(0.04)
                                 self.revpi.io[io_name].value = val
                                 self.revpi.writeprocimg()
                                 return_message = {}
