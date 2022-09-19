@@ -6,10 +6,13 @@
    It is a python based websocket server which uses the python library RevPiModIO.
 """
 import os
+import gc
 import pathlib
 import distro
 import traceback
 import uuid
+import concurrent
+import contextlib
 
 __author__ = "erminas GmbH"
 __copyright__ = "Copyright (C) 2019 erminas GmbH"
@@ -26,6 +29,7 @@ import signal
 import sys
 import bcrypt
 import ssl
+import queue
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
@@ -93,11 +97,27 @@ def ignore_aiohttp_ssl_eror(loop):
     loop.set_exception_handler(ignore_ssl_error)
 
 
-class Websocket_Client:
+class WebsocketClient:
     def __init__(self, websocket):
         self.websocket = websocket
         self.id = uuid.uuid4()
-        self.message_queue = []
+        self.message_queue = queue.Queue()
+        self.monitored_inputs = set()
+
+
+class MonitoredInput:
+    def __init__(self, input):
+        self.name = input.name
+        self.old_value = input.value
+
+    def __eq__(self, other):
+        if isinstance(other, MonitoredInput):
+            return self.name == other.name
+        else:
+            return False
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 class RevPiServer:
@@ -111,10 +131,15 @@ class RevPiServer:
         self.io_list = None
         self.running = True
 
-        self.supported_client_versions = ["1.0.9"]
+        self.buffered_writes = {}
+        self.buffered_writes_lock = threading.Lock()
+
+        self.supported_client_versions = ["1.1.0"]
         self.allow_all_user = True
         self.private_key_file = None
         self.cert_file = None
+
+        self.cycle_time_ms = 50
 
         self.config_location = "/home/pi/.config/noderedrevpinodes-server/server_config.json"
         self.supported_config_versions = ["noderedrevpinodes-server_config_1.0.0",
@@ -128,14 +153,12 @@ class RevPiServer:
 
         self.initialize_revpimodio()
         self.get_io_list(True)
-        self.register_input_callbacks()
 
-        self.connected_clients = []
-        # self.connected_clients_lock = threading.Lock()
+        self.connected_clients = set()
 
         self.authorized_user = {}
         self.load_authorized_user()
-        self.authorized_clients = []
+        self.authorized_clients = set()
 
         if self.private_key_file is None or self.cert_file is None or not os.path.isfile(
                 self.private_key_file) or not os.path.isfile(self.cert_file):
@@ -170,19 +193,16 @@ class RevPiServer:
 
         # init RevPiModIO with auto refresh
         # shared_procimg set to true ist not recommended (slow speed)
-        # if its too slow, either we make our own cycle_cloop where we update the reg_events on our own or
-        # we change the revpimodio2 lib so outputs set by other processes are read into the buffers. currently
-        # external output changes are ignored and all values are taken from the intern buffers
         self.revpi = revpimodio2.RevPiModIO(autorefresh=True, shared_procimg=True)
 
     def start_revpi_modio(self):
-        self.revpi.mainloop(blocking=False)
+        self.revpi.cycleloop(self.cyclefunc, cycletime = self.cycle_time_ms, blocking=False)
 
     def start_websocket_loop(self):
         ip = '0.0.0.0'
         if self.block_external_connections:
             ip = '127.0.0.1'
-        if distro.linux_distribution()[2] == 'stretch':
+        if distro.codename() == 'stretch':
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
             localhost_pem = os.path.abspath(self.cert_file)
 
@@ -201,24 +221,29 @@ class RevPiServer:
         self.event_loop.run_until_complete(start_server)
         self.event_loop.run_forever()
 
-    def register_input_callbacks(self):
-        # register all the input events
-        list = self.io_list['inputs']
-        exclude = []  # ["Core_Frequency", "RevPiIOCycle", "RevPiStatus", "Core_Temperatur", "RS485ErrorCnt"]
-        for x in list:
-            if x['name'] not in str(exclude):
-                logging.debug("Register input " + str(x))
-                self.revpi.io[x['name']].reg_event(self.pin_event_callback, prefire=True)
-
     def watchdog_revpimodio(self):
         while self.running:
             if self.revpi.ioerrors:
                 logging.warning("Restarting revpimodio")
                 self.initialize_revpimodio()
                 self.get_io_list(True)
-                self.register_input_callbacks()
                 self.start_revpi_modio()
             time.sleep(1)
+
+    def cyclefunc(self, ct):
+        with self.buffered_writes_lock:
+            for io_name, value_queue in self.buffered_writes.items():
+                if not value_queue.empty():
+                    val = value_queue.get_nowait()
+                    ct.io[io_name].value = val
+
+        for client in self.connected_clients:
+            for input in client.monitored_inputs:
+                new_val = ct.io[input.name].value
+                if new_val != input.old_value:
+                    message = {"name": str(input.name), "value": self.convert_value(new_val)}
+                    self.send_websocket_message(client, "input;" + json.dumps(message))
+                    input.old_value = new_val
 
     def convert_value(self, val):
         if isinstance(val, bool):
@@ -226,32 +251,17 @@ class RevPiServer:
 
         if isinstance(val, bytes):
             val = int.from_bytes(val, "little")
-        return val
-
-    def pin_event_callback(self, io_name, io_value):
-        # workaorund for undefined behaviour in piTest. 4 byte length values are interpreted like signed values
-        if self.revpi.io[io_name].length == 4:
-            self.revpi.io[io_name].signed = True
-            io_value = self.revpi.io[io_name].value
-
-        val = self.convert_value(io_value)
-        val = str(val)
-        io_name = str(io_name)
-
-        message = {"name": io_name, "value": val}
-        # with self.connected_clients_lock:
-        for client in self.connected_clients:
-            if client.id in self.authorized_clients:
-                self.send_websocket_message(client, "input;" + json.dumps(message))
+        return str(val)
 
     def get_io_list(self, force_update):
         if self.io_list and not force_update:
             return self.io_list
         elif force_update:
             io_list = {"inputs": [], "outputs": [], "mem": []}
-            ios = list(self.revpi.io.__dict__.keys())
-            for attr in ios:
-                io = self.revpi.io[attr]
+            io_names = list(self.revpi.io.__dict__.keys())
+            for name in io_names:
+                io = self.revpi.io[name]
+
                 if isinstance(io, revpimodio2.io.IntIO) or isinstance(io, revpimodio2.io.IOBase):
                     val = self.convert_value(io.value)
 
@@ -259,14 +269,14 @@ class RevPiServer:
 
                     val_type = type(io.value).__name__
 
-                    new_attr = {"name": attr, "default": default, "value": val, "type": io.type, "valType": val_type,
+                    io_description = {"name": name, "default": default, "value": val, "type": io.type, "valType": val_type,
                                 "bmk": io.bmk, "address": io.address}
                     if io.type == 300:
-                        io_list["inputs"].append(new_attr)
+                        io_list["inputs"].append(io_description)
                     elif io.type == 301:
-                        io_list["outputs"].append(new_attr)
+                        io_list["outputs"].append(io_description)
                     else:
-                        io_list["mem"].append(new_attr)
+                        io_list["mem"].append(io_description)
             self.io_list = io_list
 
             return self.io_list
@@ -285,24 +295,28 @@ class RevPiServer:
         return authorized
 
     def send_websocket_message(self, client, message):
-        client.message_queue.append(message)
+        client.message_queue.put_nowait(message)
 
-    # @asyncio.coroutine
     async def publish_messages_to_client(self, client, path):
         try:
-            while client.message_queue:
-                message = client.message_queue.pop(0)
-                logging.debug(str(client.id) + "," + json.dumps(message))
-                await client.websocket.send(message)
+            while self.running:
+                if not client.message_queue.empty():
+                    message = client.message_queue.get_nowait()
+                    logging.debug(str(client.id) + "," + json.dumps(message))
+                    await client.websocket.send(message)
+                else:
+                    await asyncio.sleep(self.cycle_time_ms/1000)
         except websockets.ConnectionClosed as e:
             logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: " + str(e))
+            raise e
+        except asyncio.CancelledError as e:
+            logging.error("Canceled publish: " + str(e))
+            raise e
 
-    # @asyncio.coroutine
     async def get_client_requests(self, client, path):
         try:
-            while True:
+            while self.running:
                 message = await client.websocket.recv()
-                global revPiServer
                 nmessage = message.split("#")
 
                 command = nmessage[0]
@@ -315,7 +329,8 @@ class RevPiServer:
                     client_version = str(args[0])
                     user = str(args[1])
                     password = str(args[2])
-                    getAutomaticUpdates = str(args[3])
+                    get_automatic_updates = str(args[3])
+                    io_names = args[4]
 
                     if not client_version in self.supported_client_versions:
                         logging.info("Unsupported client version")
@@ -325,10 +340,13 @@ class RevPiServer:
                             user,
                             password):
                         logging.info("User is authorized")
-                        self.authorized_clients.append(client.id)
+                        self.authorized_clients.add(client.id)
 
-                        if getAutomaticUpdates == 'True':
-                            self.connected_clients.append(client)
+                        if get_automatic_updates == 'True':
+                            self.connected_clients.add(client)
+
+                        for io_name in io_names:
+                            client.monitored_inputs.add(MonitoredInput(self.revpi.io[io_name]))
 
                         return_message = {}
                         self.send_websocket_message(client, message + ";" + json.dumps(return_message))
@@ -348,17 +366,16 @@ class RevPiServer:
                         force_update = (args[0] == 'True')
                         self.send_websocket_message(client, message + ";" + json.dumps(self.get_io_list(force_update)))
                     elif command == "output":  # write to pin
+                        io_name = str(args[0])
                         try:
-                            io_name = str(args[0])
                             raw_val = int(args[1])
-                            validInputs = True
+                            valid_inputs = True
                         except TypeError:
-                            io_name = str(args[0])
                             raw_val = str(args[1])
                             logging.warning("Invalid input " + raw_val + " for setting output of pin " + io_name)
-                            validInputs = False
+                            valid_inputs = False
 
-                        if validInputs and (io_name in self.revpi.io):
+                        if valid_inputs and (io_name in self.revpi.io):
                             if isinstance(self.revpi.io[io_name].value, bool):
                                 try:
                                     val = bool(int(raw_val))
@@ -372,12 +389,18 @@ class RevPiServer:
                             else:
                                 val = raw_val
                             try:
-                                self.revpi.io[io_name].value = val
-                                self.revpi.writeprocimg()
+                                with self.buffered_writes_lock:
+                                    if io_name not in self.buffered_writes.keys():
+                                        self.buffered_writes[io_name] = queue.Queue()
+                                    self.buffered_writes[io_name].put_nowait(val)
                                 return_message = {}
                                 self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                             except OverflowError:
                                 logging.warning("Error setting " + io_name + " to " + str(val) + ", overflow!")
+                                return_message = {"error": "ERROR_UNKNOWN"}
+                                self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                            except Exception as e:
+                                logging.error("Exception "+str(e))
                                 return_message = {"error": "ERROR_UNKNOWN"}
                                 self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                         else:
@@ -386,48 +409,58 @@ class RevPiServer:
 
                     elif command == "getpin":  # get single pin value
                         io_name = str(args[0])
-                        val = ""
 
                         if io_name in self.revpi.io:
-                            val = self.convert_value(self.revpi.io[io_name].value)
-                            val = str(val)
-                            return_message = {"name": io_name, "value": val}
-
+                            return_message = {"name": io_name,
+                                              "value": self.convert_value(self.revpi.io[io_name].value)}
                             self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                         else:
-                            return_message = {"name": io_name, "value": val, "error": "ERROR_PIN"}
+                            return_message = {"name": io_name, "value": "", "error": "ERROR_PIN"}
                             self.send_websocket_message(client, message + ";" + json.dumps(return_message))
 
                     else:  # print server commands
-                        self.send_websocket_message(client, message + ";" + (','.join(revPiServer.command_list)))
+                        self.send_websocket_message(client, message + ";" + (','.join(RevPiServer.command_list)))
+
         except websockets.ConnectionClosed as e:
             logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: " + str(e))
+            raise e
+        except asyncio.CancelledError as e:
+            logging.error("Canceled while getting requests: " + str(e))
+            raise e
 
-    # @asyncio.coroutine
     async def handle_clients(self, websocket, path):
         if self.block_external_connections and \
                 websocket.remote_address[0] != "localhost" and websocket.remote_address[0] != "127.0.0.1":
             logging.warning("Closing external connection of client with address " + str(websocket.remote_address[0]))
             websocket.close()
 
-        client = Websocket_Client(websocket)
+        client = WebsocketClient(websocket)
         logging.info("New client connected and was given id " + str(client.id))
 
+        tasks = [asyncio.create_task(self.get_client_requests(client, path)),
+                 asyncio.create_task(self.publish_messages_to_client(client, path))]
         try:
-            asyncio.ensure_future(self.get_client_requests(client, path))
-            while self.running and client.websocket.open:
-                asyncio.ensure_future(self.publish_messages_to_client(client, path))
-                await asyncio.sleep(0.1)
+            await websocket.wait_closed()
 
         except Exception as e:
             logging.error("There was an unexpected error. " + str(e))
             logging.error("Traceback: " + traceback.format_exc())
         finally:
-            if client in self.authorized_clients:
-                self.authorized_clients.remove(client)
+            if client.id in self.authorized_clients:
+                self.authorized_clients.remove(client.id)
             if client in self.connected_clients:
                 self.connected_clients.remove(client)
+
+            for t in tasks:
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
+
             logging.info("Client( " + str(client.id) + " ) disconnected")
+            client.monitored_inputs.clear()
+            del client
 
     def close(self):
         self.running = False
@@ -511,12 +544,12 @@ class RevPiServer:
 
     def start(self, args):
         # Start revpi pin listener thread
-        logging.info("Start revpi thread")
+        logging.info("Starting Revpi monitor thread")
 
         self.start_revpi_modio()
 
         # Start websocket server thread
-        logging.info("Start websocket server thread")
+        logging.info("Starting websocket server thread")
         self.event_loop_thread.start()
 
 
