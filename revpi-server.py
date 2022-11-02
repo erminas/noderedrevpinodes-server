@@ -196,7 +196,7 @@ class RevPiServer:
         self.revpi = revpimodio2.RevPiModIO(autorefresh=True, shared_procimg=True)
 
     def start_revpi_modio(self):
-        self.revpi.cycleloop(self.cyclefunc, cycletime = self.cycle_time_ms, blocking=False)
+        self.revpi.cycleloop(self.cyclefunc, cycletime=self.cycle_time_ms, blocking=False)
 
     def start_websocket_loop(self):
         ip = '0.0.0.0'
@@ -269,8 +269,8 @@ class RevPiServer:
 
                     val_type = type(io.value).__name__
 
-                    io_description = {"name": name, "default": default, "value": val, "type": io.type, "valType": val_type,
-                                "bmk": io.bmk, "address": io.address}
+                    io_description = {"name": name, "default": default, "value": val, "type": io.type,
+                                      "valType": val_type, "bmk": io.bmk, "address": io.address}
                     if io.type == 300:
                         io_list["inputs"].append(io_description)
                     elif io.type == 301:
@@ -305,7 +305,7 @@ class RevPiServer:
                     logging.debug(str(client.id) + "," + json.dumps(message))
                     await client.websocket.send(message)
                 else:
-                    await asyncio.sleep(self.cycle_time_ms/1000)
+                    await asyncio.sleep(self.cycle_time_ms / 1000)
         except websockets.ConnectionClosed as e:
             logging.error("Connection to websocket client " + str(client.id) + " closed unexpected: " + str(e))
             raise e
@@ -327,36 +327,37 @@ class RevPiServer:
 
                 if command == "login":
                     client_version = str(args[0])
-                    user = str(args[1])
-                    password = str(args[2])
-                    get_automatic_updates = str(args[3])
-                    io_names = args[4]
-
-                    if not client_version in self.supported_client_versions:
+                    if client_version in self.supported_client_versions:
                         logging.info("Unsupported client version")
                         return_message = {"error": "ERROR_UNSUPPORTED_VERSION"}
                         self.send_websocket_message(client, message + ";" + json.dumps(return_message))
-                    elif self.allow_all_user or client.id in self.authorized_clients or self.check_user_credentials(
-                            user,
-                            password):
-                        logging.info("User is authorized")
-                        self.authorized_clients.add(client.id)
-
-                        if get_automatic_updates == 'True':
-                            self.connected_clients.add(client)
-
-                        for io_name in io_names:
-                            client.monitored_inputs.add(MonitoredInput(self.revpi.io[io_name]))
-
-                        return_message = {}
-                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                     else:
-                        logging.warning("Unauthorized user!")
+                        user = str(args[1])
+                        password = str(args[2])
+                        get_automatic_updates = str(args[3])
+                        io_names = args[4]
 
-                        return_message = {"error": "ERROR_AUTH"}
-                        self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                        if self.allow_all_user or client.id in self.authorized_clients or self.check_user_credentials(
+                                user,
+                                password):
+                            logging.info("User is authorized")
+                            self.authorized_clients.add(client.id)
+
+                            if get_automatic_updates == 'True':
+                                self.connected_clients.add(client)
+
+                            for io_name in io_names:
+                                client.monitored_inputs.add(MonitoredInput(self.revpi.io[io_name]))
+
+                            return_message = {}
+                            self.send_websocket_message(client, message + ";" + json.dumps(return_message))
+                        else:
+                            logging.warning("Unauthorized user!")
+
+                            return_message = {"error": "ERROR_AUTH"}
+                            self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                 else:
-                    if not client.id in self.authorized_clients:
+                    if client.id not in self.authorized_clients:
                         logging.warning("Unauthorized user!")
                         return_message = {"error": "ERROR_AUTH"}
                         self.send_websocket_message(client, message + ";" + json.dumps(return_message))
@@ -400,7 +401,7 @@ class RevPiServer:
                                 return_message = {"error": "ERROR_UNKNOWN"}
                                 self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                             except Exception as e:
-                                logging.error("Exception "+str(e))
+                                logging.error("Exception " + str(e))
                                 return_message = {"error": "ERROR_UNKNOWN"}
                                 self.send_websocket_message(client, message + ";" + json.dumps(return_message))
                         else:
