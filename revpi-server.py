@@ -327,7 +327,7 @@ class RevPiServer:
 
                 if command == "login":
                     client_version = str(args[0])
-                    if client_version in self.supported_client_versions:
+                    if not client_version in self.supported_client_versions:
                         logging.info("Unsupported client version")
                         return_message = {"error": "ERROR_UNSUPPORTED_VERSION"}
                         self.send_websocket_message(client, message + ";" + json.dumps(return_message))
