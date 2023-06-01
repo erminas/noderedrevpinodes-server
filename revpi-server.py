@@ -199,9 +199,9 @@ class RevPiServer:
         self.revpi.cycleloop(self.cyclefunc, cycletime=self.cycle_time_ms, blocking=False)
 
     def start_websocket_loop(self):
-        ip = '0.0.0.0'
+        ip = ['::', '0.0.0.0']
         if self.block_external_connections:
-            ip = '127.0.0.1'
+            ip = ['::1', '127.0.0.1']
         if distro.codename() == 'stretch':
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
             localhost_pem = os.path.abspath(self.cert_file)
